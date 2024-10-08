@@ -1,0 +1,229 @@
+ALTER TABLE ORM.OPT_CONSULTA ADD (TIPODOC VARCHAR2(1 BYTE) DEFAULT 'Q' NOT NULL);
+ALTER TABLE ORM.OPT_CONSULTA ADD (CNXID INTEGER);
+ALTER TABLE ORM.OPT_CONSULTA ADD (HABILWEB VARCHAR2(1 BYTE) DEFAULT 'N' NOT NULL);
+
+COMMENT ON COLUMN ORM.OPT_CONSULTA.TIPODOC IS 'Tipo de Documento: Q - Consulta, D - Dashboard, R - Reporte';
+COMMENT ON COLUMN ORM.OPT_CONSULTA.CNXID IS 'Id de la conexión para el documento de tipo Consulta';
+COMMENT ON COLUMN ORM.OPT_CONSULTA.HABILWEB IS 'Consulta habilitada web: S - Si, N - No';
+
+
+ALTER TABLE ORM.OPT_LAYOUT ADD (LAYOUTWEB CLOB);
+COMMENT ON COLUMN ORM.OPT_LAYOUT.LAYOUTWEB IS 'Diseño de la visualización de la consulta para despliegue en versión web';
+
+--Para poder recibir correos como id de usuarios 
+ALTER TABLE ORM.OPT_USUARIO MODIFY(ID_USUARIO VARCHAR2(1000 BYTE));
+
+ALTER TABLE ORM.OPT_USUARIO ADD (FAVORITASWEB VARCHAR2(2500 BYTE));
+COMMENT ON COLUMN ORM.OPT_USUARIO.FAVORITASWEB IS 'Listado de documentos favoritos para la versión web';
+
+CREATE TABLE ORM.OPT_CONEXION
+(
+  ID_CONEXION  NUMBER(6)                        NOT NULL,
+  NOMBRE       VARCHAR2(120 BYTE)               NOT NULL,
+  ACTIVA       VARCHAR2(1 BYTE)                 NOT NULL,
+  PROVEEDOR    VARCHAR2(10 BYTE)                NOT NULL,
+  CONEXION     VARCHAR2(2000 BYTE)              NOT NULL,
+  PASSWORD     VARCHAR2(500 BYTE)               NOT NULL,
+  PARAMSADIC   VARCHAR2(2500 BYTE),
+  USRREG       VARCHAR2(30 BYTE)                NOT NULL,
+  FECREG       DATE                             DEFAULT sysdate               NOT NULL
+)
+TABLESPACE ORM_DATOS
+PCTUSED    0
+PCTFREE    10
+INITRANS   1
+MAXTRANS   255
+STORAGE    (
+            INITIAL          28M
+            NEXT             1M
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           )
+LOGGING 
+NOCOMPRESS 
+NOCACHE
+NOPARALLEL
+MONITORING;
+
+
+CREATE UNIQUE INDEX ORM.IDX_OPT_CONEXION_01 ON ORM.OPT_CONEXION
+(ID_CONEXION)
+LOGGING
+TABLESPACE ORM_INDEX
+PCTFREE    10
+INITRANS   2
+MAXTRANS   255
+STORAGE    (
+            INITIAL          2M
+            NEXT             1M
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           )
+NOPARALLEL;
+
+
+CREATE OR REPLACE PUBLIC SYNONYM OPT_CONEXION FOR ORM.OPT_CONEXION;
+
+
+ALTER TABLE ORM.OPT_CONEXION ADD (
+  CONSTRAINT PK_OPT_CONEXION
+  PRIMARY KEY
+  (ID_CONEXION)
+  USING INDEX ORM.IDX_OPT_CONEXION_01);
+
+
+CREATE OR REPLACE PUBLIC SYNONYM OPT_CONEXION FOR ORM.OPT_CONEXION;
+
+GRANT DELETE, INSERT, SELECT, UPDATE ON ORM.OPT_CONEXION TO ORM_USER_ROLE;
+
+CREATE TABLE ORM.OPT_ARCHAPL
+(
+  NOMBREARCH  VARCHAR2(300 BYTE),
+  CONTENIDO   BLOB,
+  ACCION      VARCHAR2(1 BYTE),
+  FECARCH     DATE,
+  FECREG      DATE                              DEFAULT SYSDATE
+)
+LOB (CONTENIDO) STORE AS (
+  TABLESPACE ORM_DATOS
+  ENABLE       STORAGE IN ROW
+  CHUNK       8192
+  RETENTION
+  NOCACHE
+  LOGGING
+  INDEX       (
+        TABLESPACE ORM_DATOS
+        STORAGE    (
+                    INITIAL          64K
+                    NEXT             1M
+                    MINEXTENTS       1
+                    MAXEXTENTS       UNLIMITED
+                    PCTINCREASE      0
+                    BUFFER_POOL      DEFAULT
+                   ))
+      STORAGE    (
+                  INITIAL          64K
+                  NEXT             1M
+                  MINEXTENTS       1
+                  MAXEXTENTS       UNLIMITED
+                  PCTINCREASE      0
+                  BUFFER_POOL      DEFAULT
+                 ))
+TABLESPACE ORM_DATOS
+PCTUSED    0
+PCTFREE    10
+INITRANS   1
+MAXTRANS   255
+STORAGE    (
+            INITIAL          28M
+            NEXT             1M
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           )
+LOGGING 
+NOCOMPRESS 
+NOCACHE
+NOPARALLEL
+MONITORING;
+
+
+CREATE UNIQUE INDEX ORM.IDX_OPT_ARCHAPL_01 ON ORM.OPT_ARCHAPL
+(NOMBREARCH)
+LOGGING
+TABLESPACE ORM_INDEX
+PCTFREE    10
+INITRANS   2
+MAXTRANS   255
+STORAGE    (
+            INITIAL          2M
+            NEXT             1M
+            MINEXTENTS       1
+            MAXEXTENTS       UNLIMITED
+            PCTINCREASE      0
+            BUFFER_POOL      DEFAULT
+           )
+NOPARALLEL;
+
+
+CREATE OR REPLACE PUBLIC SYNONYM OPT_ARCHAPL FOR ORM.OPT_ARCHAPL;
+
+
+ALTER TABLE ORM.OPT_ARCHAPL ADD (
+  CONSTRAINT PK_OPT_ARCHAPL
+  PRIMARY KEY
+  (NOMBREARCH)
+  USING INDEX ORM.IDX_OPT_ARCHAPL_01);
+
+GRANT DELETE, INSERT, SELECT, UPDATE ON ORM.OPT_ARCHAPL TO ORM_USER_ROLE;
+
+
+
+
+/* Formatted on 18/11/2019 7:56:41 a. m. (QP5 v5.163.1008.3004) */
+CREATE OR REPLACE TRIGGER ORM."ORM_AFT_INSERT_OPT_USUARIO"
+   AFTER INSERT
+   ON ORM.OPT_USUARIO
+   REFERENCING NEW AS NEW OLD AS OLD
+   FOR EACH ROW
+DECLARE
+   CANT   INTEGER;
+BEGIN
+   IF :NEW.id_usuario IS NOT NULL
+   THEN
+      SELECT COUNT (*)
+        INTO CANT
+        FROM OPT_ROLE
+       WHERE id_role = UPPER (:NEW.id_usuario);
+
+      IF CANT = 0
+      THEN
+         INSERT INTO OPT_ROLE (id_role, descripcion)
+              VALUES (
+                        UPPER (:NEW.id_usuario),
+                        'ROLE USUARIO ' || :NEW.id_usuario);
+      END IF;
+
+      SELECT COUNT (*)
+        INTO CANT
+        FROM OPT_ROLES_USUARIO
+       WHERE id_usuario = UPPER (:NEW.id_usuario)
+             AND id_role = UPPER (:NEW.id_usuario);
+
+      IF CANT = 0
+      THEN
+         INSERT INTO ORM.OPT_ROLES_USUARIO (id_usuario, id_role)
+              VALUES (UPPER (:NEW.id_usuario), UPPER (:NEW.id_usuario));
+      END IF;
+   END IF;
+EXCEPTION
+   WHEN OTHERS
+   THEN
+      -- Consider logging the error and then re-raise
+      RAISE;
+END;
+/
+
+
+
+ALTER TABLE ORM.OPT_PARAMETROS ADD (valorbkp VARCHAR2(1000 BYTE));
+
+UPDATE ORM.OPT_PARAMETROS
+   SET valorbkp = valor;
+
+UPDATE ORM.OPT_PARAMETROS
+   SET valor = NULL;     
+ALTER TABLE ORM.OPT_PARAMETROS MODIFY valor LONG;   
+ALTER TABLE ORM.OPT_PARAMETROS MODIFY valor CLOB;
+
+UPDATE ORM.OPT_PARAMETROS
+   SET valor = valorbkp;
+
+ALTER TABLE ORM.OPT_PARAMETROS DROP COLUMN valorbkp;
+
+ALTER INDEX ORM.OPT_PARAMETROS_PK REBUILD;
